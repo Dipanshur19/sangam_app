@@ -12,15 +12,35 @@ import '../../core/constants.dart';
 
 // ── Auth Service ──────────────────────────────────────
 class AuthService {
-  final _auth = FirebaseAuth.instance;
+  FirebaseAuth? _auth;
   String? _verificationId;
 
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  FirebaseAuth? get auth {
+    try {
+      _auth ??= FirebaseAuth.instance;
+      return _auth;
+    } catch (e) {
+      // Firebase not initialized
+      return null;
+    }
+  }
+
+  Stream<User?> get authStateChanges {
+    final firebaseAuth = auth;
+    if (firebaseAuth == null) {
+      // Return empty stream if Firebase not initialized
+      return Stream.value(null);
+    }
+    return firebaseAuth.authStateChanges();
+  }
 
   Future<void> sendOtp(String phone) async {
-    await _auth.verifyPhoneNumber(
+    final firebaseAuth = auth;
+    if (firebaseAuth == null) throw Exception('Firebase not initialized');
+    
+    await firebaseAuth.verifyPhoneNumber(
       phoneNumber: phone,
-      verificationCompleted: (cred) async => await _auth.signInWithCredential(cred),
+      verificationCompleted: (cred) async => await firebaseAuth.signInWithCredential(cred),
       verificationFailed: (e) => throw e,
       codeSent: (vId, _) => _verificationId = vId,
       codeAutoRetrievalTimeout: (_) {},
@@ -29,16 +49,24 @@ class AuthService {
   }
 
   Future<bool> verifyOtp(String otp) async {
-    if (_verificationId == null) return false;
+    final firebaseAuth = auth;
+    if (firebaseAuth == null || _verificationId == null) return false;
     try {
       final cred = PhoneAuthProvider.credential(verificationId: _verificationId!, smsCode: otp);
-      await _auth.signInWithCredential(cred);
+      await firebaseAuth.signInWithCredential(cred);
       return true;
     } catch (_) { return false; }
   }
 
-  Future<void> signOut() => _auth.signOut();
-  User? get currentUser => _auth.currentUser;
+  Future<void> signOut() async {
+    final firebaseAuth = auth;
+    if (firebaseAuth != null) await firebaseAuth.signOut();
+  }
+  
+  User? get currentUser {
+    final firebaseAuth = auth;
+    return firebaseAuth?.currentUser;
+  }
 }
 
 final authServiceProvider = Provider<AuthService>((_) => AuthService());

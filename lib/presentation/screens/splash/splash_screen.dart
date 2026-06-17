@@ -48,19 +48,27 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   Future<void> _startSequence() async {
     await Future.delayed(const Duration(milliseconds: 200));
+    if (!mounted) return;
     _logoCtrl.forward();
     await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted) return;
     _textCtrl.forward();
     await Future.delayed(const Duration(milliseconds: 1800));
     await Future.delayed(const Duration(milliseconds: 400));
 
     if (!mounted) return;
 
-    final user = ref.read(authStateProvider).value;
-    if (user != null) {
-      context.go('/dashboard');
-      return;
+    // Check auth - skip if Firebase not initialized
+    try {
+      final user = ref.read(authStateProvider).value;
+      if (user != null) {
+        if (mounted) context.go('/dashboard');
+        return;
+      }
+    } catch (e) {
+      // Firebase not initialized - continue to onboarding/login
     }
+    
     final onboarded = await ref.read(onboardedProvider.future);
     if (mounted) context.go(onboarded ? '/login' : '/onboarding');
   }
