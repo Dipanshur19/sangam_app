@@ -33,3 +33,12 @@
 
 # ── Play Core (referenced by Flutter deferred components) ─
 -dontwarn com.google.android.play.core.**
+
+
+# ── androidx.window (optional OEM window extensions) ─────
+# These extension/sidecar classes are provided by some device vendors at
+# runtime and are absent at compile time. They are referenced reflectively,
+# so we tell R8 not to fail on them.
+-dontwarn androidx.window.extensions.**
+-dontwarn androidx.window.sidecar.**
+-keep class androidx.window.** { *; }
