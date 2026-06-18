@@ -4,16 +4,16 @@ import '../../core/theme.dart';
 
 /// The Sangam brand mark: an app-icon style squircle with a "confluence" symbol —
 /// three streams (UPI · Cash · Udhar) merging into one node — finished with a
-/// glossy highlight for depth. Set [animate] to gently rotate the streams.
+/// glossy highlight for depth. Set [animated] to gently rotate the streams.
 class SangamLogo extends StatefulWidget {
   final double size;
-  final bool animate;
+  final bool animated;
   final bool showBackground;
 
   const SangamLogo({
     super.key,
     this.size = 96,
-    this.animate = true,
+    this.animated = true,
     this.showBackground = true,
   });
 
@@ -27,7 +27,7 @@ class _SangamLogoState extends State<SangamLogo> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
-    if (widget.animate) {
+    if (widget.animated) {
       _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 6))..repeat();
     }
   }
