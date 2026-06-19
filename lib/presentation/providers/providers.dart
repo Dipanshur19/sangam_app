@@ -1,4 +1,5 @@
 // lib/presentation/providers/providers.dart
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,6 +12,7 @@ import '../../domain/entities/app_user.dart';
 import '../../domain/entities/product.dart';
 import '../../services/auth_service.dart';
 import '../../services/sms_service.dart';
+import '../../services/cloud_service.dart';
 
 // ── Auth / session ────────────────────────────────────
 final authServiceProvider = Provider<AuthService>((_) => AuthService());
@@ -112,6 +114,153 @@ class SmsAutoReadNotifier extends StateNotifier<bool> {
 
 final smsAutoReadProvider = StateNotifierProvider<SmsAutoReadNotifier, bool>(
   (ref) => SmsAutoReadNotifier(ref),
+);
+
+// ── Cloud sync (Firebase / Firestore) ─────────────────
+final cloudServiceProvider = Provider<CloudService>((_) => CloudService());
+
+class CloudSyncState {
+  final bool available;   // Firebase initialised at build time
+  final bool connected;   // a shop code is set
+  final String? shopCode;
+  final bool syncing;
+  final DateTime? lastSync;
+  const CloudSyncState({this.available = false, this.connected = false, this.shopCode, this.syncing = false, this.lastSync});
+
+  CloudSyncState copyWith({bool? connected, String? shopCode, bool? syncing, DateTime? lastSync, bool clearShop = false}) =>
+      CloudSyncState(
+        available: available,
+        connected: connected ?? this.connected,
+        shopCode: clearShop ? null : (shopCode ?? this.shopCode),
+        syncing: syncing ?? this.syncing,
+        lastSync: lastSync ?? this.lastSync,
+      );
+}
+
+class CloudSyncNotifier extends StateNotifier<CloudSyncState> {
+  final Ref _ref;
+  static const _key = 'sangam_shop_code';
+  List<StreamSubscription> _subs = [];
+
+  CloudSyncNotifier(this._ref) : super(CloudSyncState(available: CloudService.available)) {
+    _restore();
+  }
+
+  Future<void> _restore() async {
+    if (!CloudService.available) return;
+    final p = await SharedPreferences.getInstance();
+    final code = p.getString(_key);
+    if (code != null && code.isNotEmpty) {
+      state = state.copyWith(connected: true, shopCode: code);
+      await syncNow();
+      _startListening(code);
+    }
+  }
+
+  Future<bool> connect(String shopCode) async {
+    if (!CloudService.available) return false;
+    final code = shopCode.trim().toUpperCase();
+    if (code.isEmpty) return false;
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_key, code);
+    state = state.copyWith(connected: true, shopCode: code);
+    await syncNow();
+    _startListening(code);
+    return true;
+  }
+
+  Future<void> disconnect() async {
+    for (final s in _subs) {
+      await s.cancel();
+    }
+    _subs = [];
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_key);
+    state = state.copyWith(connected: false, clearShop: true);
+  }
+
+  void _startListening(String code) {
+    for (final s in _subs) {
+      s.cancel();
+    }
+    _subs = _ref.read(cloudServiceProvider).listen(code, _pullMerge);
+  }
+
+  /// Full reconcile: push local up, then pull everything down.
+  Future<void> syncNow() async {
+    if (!state.connected || state.syncing) return;
+    final code = state.shopCode!;
+    final cloud = _ref.read(cloudServiceProvider);
+    final local = _ref.read(localSourceProvider);
+    state = state.copyWith(syncing: true);
+    try {
+      await cloud.pushCustomers(code, await local.getCustomers());
+      await cloud.pushTransactions(code, await local.getTransactions());
+      await cloud.pushProducts(code, await local.getProducts());
+      await cloud.pushProfile(code, (await local.getStoreProfile()).toMap());
+      await _pullMerge();
+      state = state.copyWith(syncing: false, lastSync: DateTime.now());
+    } catch (_) {
+      state = state.copyWith(syncing: false);
+    }
+  }
+
+  /// Pull remote → overwrite local (cloud holds the union after pushes).
+  Future<void> _pullMerge() async {
+    if (state.shopCode == null) return;
+    final code = state.shopCode!;
+    final cloud = _ref.read(cloudServiceProvider);
+    final local = _ref.read(localSourceProvider);
+    try {
+      await local.setCustomers(await cloud.pullCustomers(code));
+      await local.setTransactions(await cloud.pullTransactions(code));
+      await local.setProducts(await cloud.pullProducts(code));
+      final remoteProfile = await cloud.pullProfile(code);
+      if (remoteProfile != null) {
+        final localProfile = _ref.read(storeProfileProvider);
+        if (!localProfile.isConfigured) {
+          await _ref.read(storeProfileProvider.notifier).save(StoreProfile.fromMap(remoteProfile));
+        }
+      }
+      _refresh();
+    } catch (_) {/* offline / transient */}
+  }
+
+  /// Fire-and-forget push after a local change (listener handles others' pulls).
+  void pushChanges() {
+    if (!state.connected || state.syncing) return;
+    final code = state.shopCode!;
+    final cloud = _ref.read(cloudServiceProvider);
+    final local = _ref.read(localSourceProvider);
+    () async {
+      try {
+        await cloud.pushCustomers(code, await local.getCustomers());
+        await cloud.pushTransactions(code, await local.getTransactions());
+        await cloud.pushProducts(code, await local.getProducts());
+        await cloud.pushProfile(code, (await local.getStoreProfile()).toMap());
+      } catch (_) {/* offline; will reconcile on next syncNow */}
+    }();
+  }
+
+  void _refresh() {
+    _ref.invalidate(transactionsStreamProvider);
+    _ref.invalidate(customersStreamProvider);
+    _ref.invalidate(productsStreamProvider);
+    _ref.invalidate(todayTotalsProvider);
+    _ref.invalidate(overdueCustomersProvider);
+  }
+
+  @override
+  void dispose() {
+    for (final s in _subs) {
+      s.cancel();
+    }
+    super.dispose();
+  }
+}
+
+final cloudSyncProvider = StateNotifierProvider<CloudSyncNotifier, CloudSyncState>(
+  (ref) => CloudSyncNotifier(ref),
 );
 
 // ── Local source with demo data ───────────────────────
@@ -267,6 +416,11 @@ class LocalSource {
     await p.setString(_productsKey, jsonEncode(list.map((e) => e.toMap()).toList()));
   }
 
+  // Bulk setters used by cloud sync to merge remote data.
+  Future<void> setCustomers(List<Customer> list) => _saveCustomers(list);
+  Future<void> setTransactions(List<entity.Transaction> list) => _saveTransactions(list);
+  Future<void> setProducts(List<Product> list) => _saveProducts(list);
+
   // Computed
   Future<double> getBalance(String custId) async {
     final txns = await getTransactions();
@@ -364,6 +518,7 @@ final addTransactionProvider = Provider<Future<void> Function(entity.Transaction
     ref.invalidate(_txnStreamCtrl);
     ref.invalidate(todayTotalsProvider);
     ref.invalidate(overdueCustomersProvider);
+    ref.read(cloudSyncProvider.notifier).pushChanges();
   };
 });
 
@@ -381,6 +536,7 @@ final addCustomerProvider = Provider<Future<void> Function(Customer)>((ref) {
   return (c) async {
     await ref.read(localSourceProvider).addCustomer(c);
     ref.invalidate(customersStreamProvider);
+    ref.read(cloudSyncProvider.notifier).pushChanges();
   };
 });
 
@@ -411,6 +567,7 @@ final saveProductProvider = Provider<Future<void> Function(Product)>((ref) {
   return (item) async {
     await ref.read(localSourceProvider).updateProduct(item);
     ref.invalidate(productsStreamProvider);
+    ref.read(cloudSyncProvider.notifier).pushChanges();
   };
 });
 
@@ -418,6 +575,7 @@ final deleteProductProvider = Provider<Future<void> Function(String)>((ref) {
   return (id) async {
     await ref.read(localSourceProvider).deleteProduct(id);
     ref.invalidate(productsStreamProvider);
+    ref.read(cloudSyncProvider.notifier).pushChanges();
   };
 });
 

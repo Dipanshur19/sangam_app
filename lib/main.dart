@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'core/theme.dart';
 import 'router.dart';
+import 'firebase_options.dart';
+import 'services/cloud_service.dart';
 import 'presentation/providers/providers.dart';
 
 void main() async {
@@ -15,10 +18,16 @@ void main() async {
     statusBarIconBrightness: Brightness.dark,
   ));
 
-  // Firebase — uncomment after flutterfire configure
-  // try {
-  //   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  // } catch (e) { debugPrint('Firebase skipped: $e'); }
+  // Cloud sync — only initialises if Firebase keys were provided at build time
+  // (via --dart-define). The app runs fully offline otherwise.
+  if (DefaultFirebaseOptions.isConfigured) {
+    try {
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+      CloudService.markAvailable();
+    } catch (e) {
+      debugPrint('Firebase init skipped: $e');
+    }
+  }
 
   runApp(const ProviderScope(child: SangamApp()));
 }

@@ -120,12 +120,36 @@ Release builds use R8 + resource shrinking (`android/app/proguard-rules.pro`).
 - **Data safety:** ledger stays on-device; SMS text is sent to Groq only if a
   Groq key was built in.
 
-## Cross-device sync (roadmap)
+## Cross-device cloud sync (Firebase)
 
-Multi-user login works on a shared shop device today. To let the owner and staff
-use **separate phones** on the same shop data, a cloud backend (e.g. Firebase
-Firestore or Supabase) is needed. The data layer is structured so a cloud source
-can be added; reach out to wire it once a project is created.
+Owner + staff can share **one live ledger across separate phones** via Firebase
+Firestore. It's **opt-in and build-safe** — without keys the app runs fully
+offline; no `google-services.json` or Gradle plugin is required (manual init).
+
+**One-time setup (5 min):**
+1. Create a project at **console.firebase.google.com**.
+2. Add an **Android app** with package name **`com.sangam.app`**.
+3. **Build → Firestore Database → Create database** (test mode is fine to start).
+4. **Project settings → General → Your apps** — copy these values:
+   `apiKey`, `appId` (App ID), `messagingSenderId` (Sender ID), `projectId`,
+   `storageBucket`.
+5. Build/run with the keys (they're client-side, safe to use; not committed):
+   ```bash
+   flutter run \
+     --dart-define=FIREBASE_API_KEY=AIza... \
+     --dart-define=FIREBASE_APP_ID=1:123:android:abc \
+     --dart-define=FIREBASE_SENDER_ID=123456789 \
+     --dart-define=FIREBASE_PROJECT_ID=sangam-xxxx \
+     --dart-define=FIREBASE_STORAGE_BUCKET=sangam-xxxx.appspot.com
+   ```
+
+**Using it:** Settings → **Cloud sync → Connect** → enter any shop code (e.g.
+`SMRITI2024`) on the owner's phone, then the **same code** on staff phones.
+Data lives under `shops/{shopCode}/...` and syncs in real time (push on change +
+Firestore snapshot listeners + a "Sync now" button).
+
+> For production, lock down Firestore security rules (test mode is open). A
+> simple rule is to require the shop code path and authenticated access.
 
 ## Project structure
 

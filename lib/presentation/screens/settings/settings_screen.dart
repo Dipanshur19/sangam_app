@@ -100,6 +100,10 @@ class SettingsScreen extends ConsumerWidget {
 
           const SizedBox(height: 16),
 
+          // ── Cloud sync ──
+          _CloudSyncSection(),
+          const SizedBox(height: 16),
+
           // ── Business tools ──
           _Section(title: 'Business', children: [
             _Tile(icon: Icons.person_outline_rounded, label: 'Profile', sub: 'Business info, GST, UPI ID, address', onTap: () => context.push('/profile')),
@@ -452,4 +456,111 @@ class _Tile extends StatelessWidget {
     trailing: onTap != null ? const Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.text4) : null,
     onTap: onTap, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
   );
+}
+
+
+// ── Cloud sync section ──────────────────────────────────
+class _CloudSyncSection extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cloud = ref.watch(cloudSyncProvider);
+
+    if (!cloud.available) {
+      return _Section(title: 'Cloud sync', children: const [
+        _Tile(
+          icon: Icons.cloud_off_rounded,
+          label: 'Not enabled in this build',
+          sub: 'Build with Firebase keys (--dart-define) to sync across devices. See README.',
+        ),
+      ]);
+    }
+
+    if (!cloud.connected) {
+      return _Section(title: 'Cloud sync', children: [
+        _Tile(
+          icon: Icons.cloud_queue_rounded,
+          label: 'Connect to cloud',
+          sub: 'Enter a shop code to share data across phones',
+          onTap: () => _connectDialog(context, ref),
+        ),
+      ]);
+    }
+
+    final last = cloud.syncing
+        ? 'Syncing…'
+        : (cloud.lastSync != null ? 'Last synced ${_ago(cloud.lastSync!)}' : 'Connected');
+    return _Section(title: 'Cloud sync', children: [
+      _Tile(icon: Icons.cloud_done_rounded, label: 'Connected · ${cloud.shopCode}', sub: last),
+      const Divider(height: 0, indent: 56),
+      _Tile(
+        icon: Icons.sync_rounded,
+        label: 'Sync now',
+        sub: 'Push & pull the latest data',
+        onTap: () async {
+          await ref.read(cloudSyncProvider.notifier).syncNow();
+          if (context.mounted) context.showSnack('Synced');
+        },
+      ),
+      const Divider(height: 0, indent: 56),
+      _Tile(
+        icon: Icons.link_off_rounded,
+        label: 'Disconnect',
+        sub: 'Stop syncing this device',
+        onTap: () async {
+          await ref.read(cloudSyncProvider.notifier).disconnect();
+          if (context.mounted) context.showSnack('Disconnected from cloud');
+        },
+      ),
+    ]);
+  }
+
+  static String _ago(DateTime t) {
+    final d = DateTime.now().difference(t);
+    if (d.inMinutes < 1) return 'just now';
+    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+    if (d.inHours < 24) return '${d.inHours}h ago';
+    return '${d.inDays}d ago';
+  }
+
+  void _connectDialog(BuildContext context, WidgetRef ref) {
+    final ctrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Connect to cloud', style: AppTextStyles.h3),
+          const SizedBox(height: 6),
+          Text(
+            'Pick any shop code (e.g. SMRITI2024) on the owner\'s phone, then enter the SAME code on staff phones to share one live ledger.',
+            style: AppTextStyles.caption,
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: ctrl,
+            autofocus: true,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(labelText: 'Shop code', hintText: 'e.g. SMRITI2024'),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () async {
+                final ok = await ref.read(cloudSyncProvider.notifier).connect(ctrl.text);
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (context.mounted) {
+                  context.showSnack(ok ? 'Connected — syncing…' : 'Enter a valid shop code', isError: !ok);
+                }
+              },
+              child: const Text('Connect'),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
 }
