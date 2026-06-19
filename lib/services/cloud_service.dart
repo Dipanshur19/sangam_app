@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../domain/entities/customer.dart';
 import '../domain/entities/product.dart';
-import '../domain/entities/transaction.dart';
+import '../domain/entities/transaction.dart' as entity;
 
 /// Firestore-backed cloud sync. Data lives under `shops/{shopCode}/...` so the
 /// owner and staff that share a shop code see the same ledger across phones.
@@ -29,24 +29,24 @@ class CloudService {
         createdAt: DateTime.tryParse(m['createdAt'] as String? ?? '') ?? DateTime.now(),
       );
 
-  Map<String, dynamic> _txnMap(Transaction t) => {
+  Map<String, dynamic> _txnMap(entity.Transaction t) => {
         'id': t.id,
         'customerId': t.customerId,
         'customerName': t.customerName,
         'amount': t.amount,
         'type': t.type.firestoreKey,
-        'direction': t.direction == TransactionDirection.incoming ? 'in' : 'out',
+        'direction': t.direction == entity.TransactionDirection.incoming ? 'in' : 'out',
         'note': t.note,
         'date': t.date.toIso8601String(),
         'source': t.source,
       };
-  Transaction _txnFromMap(Map<String, dynamic> m) => Transaction(
+  entity.Transaction _txnFromMap(Map<String, dynamic> m) => entity.Transaction(
         id: m['id'] as String,
         customerId: m['customerId'] as String?,
         customerName: m['customerName'] as String? ?? 'Walk-in',
         amount: (m['amount'] as num?)?.toDouble() ?? 0,
-        type: TransactionTypeExt.fromKey(m['type'] as String? ?? 'cash'),
-        direction: (m['direction'] as String?) == 'in' ? TransactionDirection.incoming : TransactionDirection.outgoing,
+        type: entity.TransactionTypeExt.fromKey(m['type'] as String? ?? 'cash'),
+        direction: (m['direction'] as String?) == 'in' ? entity.TransactionDirection.incoming : entity.TransactionDirection.outgoing,
         note: m['note'] as String?,
         date: DateTime.tryParse(m['date'] as String? ?? '') ?? DateTime.now(),
         source: m['source'] as String? ?? 'manual',
@@ -68,7 +68,7 @@ class CloudService {
   Future<void> pushCustomers(String shop, List<Customer> list) =>
       _pushAll(_col(shop, 'customers'), list.map(_custMap).toList());
 
-  Future<void> pushTransactions(String shop, List<Transaction> list) =>
+  Future<void> pushTransactions(String shop, List<entity.Transaction> list) =>
       _pushAll(_col(shop, 'transactions'), list.map(_txnMap).toList());
 
   Future<void> pushProducts(String shop, List<Product> list) =>
@@ -84,7 +84,7 @@ class CloudService {
     return snap.docs.map((d) => _custFromMap(d.data())).toList();
   }
 
-  Future<List<Transaction>> pullTransactions(String shop) async {
+  Future<List<entity.Transaction>> pullTransactions(String shop) async {
     final snap = await _col(shop, 'transactions').get();
     return snap.docs.map((d) => _txnFromMap(d.data())).toList();
   }
