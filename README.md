@@ -1,4 +1,19 @@
-# Sangam — Sab ka ek hisaab
+<h1 align="center">Sangam — Sab ka ek hisaab</h1>
+
+<p align="center">
+  <b>One ledger for a kirana shop's UPI (Paytm · GPay · PhonePe), cash and udhar —<br/>
+  with automatic UPI-SMS capture and a multi-user (owner + staff) login.</b>
+</p>
+
+<p align="center">
+  <img alt="Flutter" src="https://img.shields.io/badge/Flutter-Dart-02569B?logo=flutter&logoColor=white"/>
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Android-3DDC84?logo=android&logoColor=white"/>
+  <img alt="State" src="https://img.shields.io/badge/state-Riverpod-7C4DFF"/>
+  <img alt="AI" src="https://img.shields.io/badge/SMS%20parsing-Groq%20LLM-F55036"/>
+  <img alt="Offline first" src="https://img.shields.io/badge/offline-first-059669"/>
+</p>
+
+> **POC Demo submission:** see **[SUBMISSION.md](SUBMISSION.md)** for the demo video script, tech stack, asks for the panel and notes for judges.
 
 A professional, OkCredit-style ledger for Indian kirana shops. One place for UPI
 (Paytm / GPay / PhonePe), cash and udhar (credit) — with a multi-user
