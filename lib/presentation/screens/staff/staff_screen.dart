@@ -34,7 +34,7 @@ class _S extends ConsumerState<StaffScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Sangam', style: AppTextStyles.h4),
+              const Text('Sangam', style: AppTextStyles.h4),
               Text('${store.name.isEmpty ? 'Store' : store.name} · Staff',
                   style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
             ]),
@@ -43,9 +43,9 @@ class _S extends ConsumerState<StaffScreen> {
         ])),
 
         const SizedBox(height: 40),
-        Text('Customer Balance Lookup', style: AppTextStyles.h2).animate().fadeIn(duration: 400.ms),
+        const Text('Customer Balance Lookup', style: AppTextStyles.h2).animate().fadeIn(duration: 400.ms),
         const SizedBox(height: 8),
-        Text('Type a name to see their balance', style: AppTextStyles.body).animate(delay: 100.ms).fadeIn(),
+        const Text('Type a name to see their balance', style: AppTextStyles.body).animate(delay: 100.ms).fadeIn(),
         const SizedBox(height: 28),
 
         Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: TextField(
@@ -64,7 +64,7 @@ class _S extends ConsumerState<StaffScreen> {
         if (_query.isNotEmpty) Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child:
           found != null ? _Result(customerId: found.id, name: found.name).animate().scale(begin: const Offset(0.9,0.9), end: const Offset(1,1), curve: Curves.elasticOut)
             : Container(padding: const EdgeInsets.all(28), width: double.infinity, decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(AppRadius.xl), border: Border.all(color: AppColors.border)),
-                child: Column(children: [const Icon(Icons.person_search_outlined, size: 36, color: AppColors.border), const SizedBox(height: 8), Text('No customer found', style: AppTextStyles.bodyMd)])),
+                child: const Column(children: [Icon(Icons.person_search_outlined, size: 36, color: AppColors.border), SizedBox(height: 8), Text('No customer found', style: AppTextStyles.bodyMd)])),
         ),
       ])),
     );
@@ -82,7 +82,7 @@ class _Result extends ConsumerWidget {
     return Container(padding: const EdgeInsets.all(32), width: double.infinity,
       decoration: BoxDecoration(gradient: AppGradients.saffron, borderRadius: BorderRadius.circular(AppRadius.xxl), boxShadow: AppShadows.saffron),
       child: Column(children: [
-        Container(width: 64, height: 64, decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+        Container(width: 64, height: 64, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
             child: Center(child: Text(name[0], style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w700)))),
         const SizedBox(height: 14),
         Text(name, style: AppTextStyles.h3.copyWith(color: Colors.white)),

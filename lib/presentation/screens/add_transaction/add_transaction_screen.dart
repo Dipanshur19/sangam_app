@@ -66,14 +66,14 @@ class _S extends ConsumerState<AddTransactionScreen> {
       return Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(title: const Text('Add Transaction'), leading: BackButton(onPressed: () => context.go('/dashboard'))),
-        body: Center(
+        body: const Center(
           child: Padding(
-            padding: const EdgeInsets.all(32),
+            padding: EdgeInsets.all(32),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.lock_outline_rounded, size: 48, color: AppColors.border),
-              const SizedBox(height: 12),
+              Icon(Icons.lock_outline_rounded, size: 48, color: AppColors.border),
+              SizedBox(height: 12),
               Text('View-only access', style: AppTextStyles.h4),
-              const SizedBox(height: 6),
+              SizedBox(height: 6),
               Text('Ask the shop owner to enable editing for your account.',
                   textAlign: TextAlign.center, style: AppTextStyles.caption),
             ]),
@@ -98,7 +98,7 @@ class _S extends ConsumerState<AddTransactionScreen> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(AppRadius.lg), border: Border.all(color: AppColors.border)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Paste UPI SMS', style: AppTextStyles.label),
+              const Text('Paste UPI SMS', style: AppTextStyles.label),
               const SizedBox(height: 8),
               TextField(controller: _smsCtrl, maxLines: 3, style: AppTextStyles.bodySm,
                 decoration: const InputDecoration(hintText: 'e.g. ₹500 received via Paytm UPI')),
@@ -110,19 +110,19 @@ class _S extends ConsumerState<AddTransactionScreen> {
           ).animate().fadeIn(duration: 300.ms).slideY(begin: -0.1, end: 0),
           if (_showSms) const SizedBox(height: 14),
 
-          Text('PAYMENT TYPE', style: AppTextStyles.labelCaps),
+          const Text('PAYMENT TYPE', style: AppTextStyles.labelCaps),
           const SizedBox(height: 10),
           _TypeGrid(selected: _type, onSelect: (t) => setState(() => _type = t)),
           const SizedBox(height: 20),
 
-          Text('AMOUNT', style: AppTextStyles.labelCaps),
+          const Text('AMOUNT', style: AppTextStyles.labelCaps),
           const SizedBox(height: 10),
           TextField(controller: _amountCtrl, keyboardType: TextInputType.number,
             style: AppTextStyles.h2,
             decoration: const InputDecoration(prefixText: '₹  ', hintText: '0')),
           const SizedBox(height: 20),
 
-          Text('CUSTOMER (optional)', style: AppTextStyles.labelCaps),
+          const Text('CUSTOMER (optional)', style: AppTextStyles.labelCaps),
           const SizedBox(height: 10),
           customersAsync.when(
             loading: () => const LinearProgressIndicator(),
@@ -136,7 +136,7 @@ class _S extends ConsumerState<AddTransactionScreen> {
           ),
           const SizedBox(height: 20),
 
-          Text('NOTE (optional)', style: AppTextStyles.labelCaps),
+          const Text('NOTE (optional)', style: AppTextStyles.labelCaps),
           const SizedBox(height: 10),
           TextField(controller: _noteCtrl, decoration: const InputDecoration(hintText: 'e.g. Atta 10kg, Dal 2kg')),
           const SizedBox(height: 28),

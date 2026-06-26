@@ -12,16 +12,14 @@ import '../../domain/entities/app_user.dart';
 import '../../domain/entities/product.dart';
 import '../../services/auth_service.dart';
 import '../../services/sms_service.dart';
-import '../../services/cloud_service.dart';
+import '../../services/upi_notification_service.dart';
 
-// ── Auth / session ────────────────────────────────────
 final authServiceProvider = Provider<AuthService>((_) => AuthService());
 
-/// The currently logged-in user (null = logged out). Restores the saved session
-/// on startup.
 class SessionNotifier extends StateNotifier<AppUser?> {
   final AuthService _auth;
   bool _restored = false;
+
   SessionNotifier(this._auth) : super(null) {
     _restore();
   }
@@ -33,8 +31,16 @@ class SessionNotifier extends StateNotifier<AppUser?> {
 
   bool get isRestored => _restored;
 
-  Future<AppUser?> login({required String username, required String password, required UserRole role}) async {
-    final user = await _auth.verify(username: username, password: password, role: role);
+  Future<AppUser?> login({
+    required String username,
+    required String password,
+    required UserRole role,
+  }) async {
+    final user = await _auth.verify(
+      username: username,
+      password: password,
+      role: role,
+    );
     if (user != null) {
       await _auth.setSession(user.id);
       state = user;
@@ -42,7 +48,6 @@ class SessionNotifier extends StateNotifier<AppUser?> {
     return user;
   }
 
-  /// Used right after creating the admin during setup to start a session.
   Future<void> setUser(AppUser user) async {
     await _auth.setSession(user.id);
     state = user;
@@ -58,18 +63,21 @@ final currentUserProvider = StateNotifierProvider<SessionNotifier, AppUser?>(
   (ref) => SessionNotifier(ref.watch(authServiceProvider)),
 );
 
-final usersProvider = FutureProvider<List<AppUser>>((ref) => ref.watch(authServiceProvider).getUsers());
-final hasAdminProvider = FutureProvider<bool>((ref) => ref.watch(authServiceProvider).hasAdmin());
+final usersProvider = FutureProvider<List<AppUser>>(
+  (ref) => ref.watch(authServiceProvider).getUsers(),
+);
 
-// ── SMS auto-read ─────────────────────────────────────
+final hasAdminProvider = FutureProvider<bool>(
+  (ref) => ref.watch(authServiceProvider).hasAdmin(),
+);
+
 final smsServiceProvider = Provider<SmsService>((_) => SmsService());
+final upiNotificationServiceProvider = Provider<UpiNotificationService>((_) => UpiNotificationService());
 
-/// Whether automatic UPI SMS reading is enabled. Persists the choice, requests
-/// permission, scans recent inbox messages, and listens for new ones while the
-/// app is open — pushing parsed payments into [smsQueueProvider].
 class SmsAutoReadNotifier extends StateNotifier<bool> {
   final Ref _ref;
   static const _key = 'sangam_sms_auto';
+
   SmsAutoReadNotifier(this._ref) : super(false) {
     _load();
   }
@@ -102,7 +110,6 @@ class SmsAutoReadNotifier extends StateNotifier<bool> {
     state = false;
   }
 
-  /// Scan the recent inbox now. Returns the number of payments found.
   Future<int> scanNow() async {
     final entries = await _ref.read(smsServiceProvider).readRecentUpiSms(days: 3);
     for (final e in entries) {
@@ -116,178 +123,9 @@ final smsAutoReadProvider = StateNotifierProvider<SmsAutoReadNotifier, bool>(
   (ref) => SmsAutoReadNotifier(ref),
 );
 
-// ── Cloud sync (Firebase / Firestore) ─────────────────
-final cloudServiceProvider = Provider<CloudService>((_) => CloudService());
-
-class CloudSyncState {
-  final bool available;   // Firebase initialised at build time
-  final bool connected;   // a shop code is set
-  final String? shopCode;
-  final bool syncing;
-  final DateTime? lastSync;
-  const CloudSyncState({this.available = false, this.connected = false, this.shopCode, this.syncing = false, this.lastSync});
-
-  CloudSyncState copyWith({bool? connected, String? shopCode, bool? syncing, DateTime? lastSync, bool clearShop = false}) =>
-      CloudSyncState(
-        available: available,
-        connected: connected ?? this.connected,
-        shopCode: clearShop ? null : (shopCode ?? this.shopCode),
-        syncing: syncing ?? this.syncing,
-        lastSync: lastSync ?? this.lastSync,
-      );
-}
-
-class CloudSyncNotifier extends StateNotifier<CloudSyncState> {
-  final Ref _ref;
-  static const _key = 'sangam_shop_code';
-  List<StreamSubscription> _subs = [];
-
-  CloudSyncNotifier(this._ref) : super(CloudSyncState(available: CloudService.available)) {
-    _restore();
-  }
-
-  Future<void> _restore() async {
-    if (!CloudService.available) return;
-    final p = await SharedPreferences.getInstance();
-    final code = p.getString(_key);
-    if (code != null && code.isNotEmpty) {
-      state = state.copyWith(connected: true, shopCode: code);
-      await syncNow();
-      _startListening(code);
-    }
-  }
-
-  Future<bool> connect(String shopCode) async {
-    if (!CloudService.available) return false;
-    final code = shopCode.trim().toUpperCase();
-    if (code.isEmpty) return false;
-    final p = await SharedPreferences.getInstance();
-    await p.setString(_key, code);
-    state = state.copyWith(connected: true, shopCode: code);
-    await syncNow();
-    _startListening(code);
-    return true;
-  }
-
-  Future<void> disconnect() async {
-    for (final s in _subs) {
-      await s.cancel();
-    }
-    _subs = [];
-    final p = await SharedPreferences.getInstance();
-    await p.remove(_key);
-    state = state.copyWith(connected: false, clearShop: true);
-  }
-
-  void _startListening(String code) {
-    for (final s in _subs) {
-      s.cancel();
-    }
-    _subs = _ref.read(cloudServiceProvider).listen(code, _pullMerge);
-  }
-
-  /// Full reconcile: push local up, then pull everything down.
-  Future<void> syncNow() async {
-    if (!state.connected || state.syncing) return;
-    final code = state.shopCode!;
-    final cloud = _ref.read(cloudServiceProvider);
-    final local = _ref.read(localSourceProvider);
-    state = state.copyWith(syncing: true);
-    try {
-      await cloud.pushCustomers(code, await local.getCustomers());
-      await cloud.pushTransactions(code, await local.getTransactions());
-      await cloud.pushProducts(code, await local.getProducts());
-      await cloud.pushProfile(code, (await local.getStoreProfile()).toMap());
-      await _pullMerge();
-      state = state.copyWith(syncing: false, lastSync: DateTime.now());
-    } catch (_) {
-      state = state.copyWith(syncing: false);
-    }
-  }
-
-  /// Pull remote → overwrite local (cloud holds the union after pushes).
-  Future<void> _pullMerge() async {
-    if (state.shopCode == null) return;
-    final code = state.shopCode!;
-    final cloud = _ref.read(cloudServiceProvider);
-    final local = _ref.read(localSourceProvider);
-    try {
-      await local.setCustomers(await cloud.pullCustomers(code));
-      await local.setTransactions(await cloud.pullTransactions(code));
-      await local.setProducts(await cloud.pullProducts(code));
-      final remoteProfile = await cloud.pullProfile(code);
-      if (remoteProfile != null) {
-        final localProfile = _ref.read(storeProfileProvider);
-        if (!localProfile.isConfigured) {
-          await _ref.read(storeProfileProvider.notifier).save(StoreProfile.fromMap(remoteProfile));
-        }
-      }
-      _refresh();
-    } catch (_) {/* offline / transient */}
-  }
-
-  /// Fire-and-forget push after a local change (listener handles others' pulls).
-  void pushChanges() {
-    if (!state.connected || state.syncing) return;
-    final code = state.shopCode!;
-    final cloud = _ref.read(cloudServiceProvider);
-    final local = _ref.read(localSourceProvider);
-    () async {
-      try {
-        await cloud.pushCustomers(code, await local.getCustomers());
-        await cloud.pushTransactions(code, await local.getTransactions());
-        await cloud.pushProducts(code, await local.getProducts());
-        await cloud.pushProfile(code, (await local.getStoreProfile()).toMap());
-      } catch (_) {/* offline; will reconcile on next syncNow */}
-    }();
-  }
-
-  void _refresh() {
-    _ref.invalidate(transactionsStreamProvider);
-    _ref.invalidate(customersStreamProvider);
-    _ref.invalidate(productsStreamProvider);
-    _ref.invalidate(todayTotalsProvider);
-    _ref.invalidate(overdueCustomersProvider);
-  }
-
-  @override
-  void dispose() {
-    for (final s in _subs) {
-      s.cancel();
-    }
-    super.dispose();
-  }
-}
-
-final cloudSyncProvider = StateNotifierProvider<CloudSyncNotifier, CloudSyncState>(
-  (ref) => CloudSyncNotifier(ref),
-);
-
-// ── Language (English / Hindi) ────────────────────────
-class LanguageNotifier extends StateNotifier<bool> {
-  static const _key = 'sangam_lang_hi';
-  LanguageNotifier() : super(false) {
-    _load();
-  }
-  Future<void> _load() async {
-    final p = await SharedPreferences.getInstance();
-    state = p.getBool(_key) ?? false;
-  }
-  Future<void> setHindi(bool v) async {
-    final p = await SharedPreferences.getInstance();
-    await p.setBool(_key, v);
-    state = v;
-  }
-  void toggle() => setHindi(!state);
-}
-
-/// true = Hindi, false = English.
-final languageProvider = StateNotifierProvider<LanguageNotifier, bool>((ref) => LanguageNotifier());
-
-// ── Local source with demo data ───────────────────────
 class LocalSource {
-  static const _custsKey  = 'sangam_custs';
-  static const _txnsKey   = 'sangam_txns';
+  static const _custsKey = 'sangam_custs';
+  static const _txnsKey = 'sangam_txns';
   static const _seededKey = 'sangam_seeded_v2';
   static const _profileKey = 'sangam_store_profile';
   static const _productsKey = 'sangam_products';
@@ -296,18 +134,15 @@ class LocalSource {
   SharedPreferences? _p;
   Future<SharedPreferences> get _prefs async => _p ??= await SharedPreferences.getInstance();
 
-  /// Ensures local storage is ready. Does NOT auto-seed demo data anymore —
-  /// new shop owners choose between a fresh start and demo data during setup.
   Future<void> ensureSeeded() async {
     await _prefs;
   }
 
-  // ── Store profile ──
   Future<StoreProfile> getStoreProfile() async {
     final p = await _prefs;
     final raw = p.getString(_profileKey);
     if (raw == null) return StoreProfile.empty;
-    return StoreProfile.fromMap(jsonDecode(raw) as Map<String, dynamic>);
+    return StoreProfile.fromMap(Map<String, dynamic>.from(jsonDecode(raw) as Map));
   }
 
   Future<void> saveStoreProfile(StoreProfile profile) async {
@@ -315,7 +150,6 @@ class LocalSource {
     await p.setString(_profileKey, jsonEncode(profile.toMap()));
   }
 
-  /// Seed demo customers + transactions (used for "Try with demo data").
   Future<void> seedDemoData() async {
     final p = await _prefs;
     await _saveCustomers(_seedCustomers());
@@ -323,7 +157,6 @@ class LocalSource {
     await p.setBool(_seededKey, true);
   }
 
-  /// Start with an empty ledger (used for a real shop's first launch).
   Future<void> startFresh() async {
     final p = await _prefs;
     await _saveCustomers([]);
@@ -331,56 +164,56 @@ class LocalSource {
     await p.setBool(_seededKey, true);
   }
 
-  /// Erase all transactions and customers but keep the store profile.
   Future<void> clearAllData() async {
     await _saveCustomers([]);
     await _saveTransactions([]);
   }
 
   List<Customer> _seedCustomers() => [
-    Customer(id:'c1',name:'Ramesh Gupta',   phone:'9876543210',createdAt:DateTime.now().subtract(const Duration(days:30))),
-    Customer(id:'c2',name:'Kavita Devi',    phone:'9765432109',createdAt:DateTime.now().subtract(const Duration(days:25))),
-    Customer(id:'c3',name:'Mohan Sharma',   phone:'9654321098',createdAt:DateTime.now().subtract(const Duration(days:20))),
-    Customer(id:'c4',name:'Sunita Singh',   phone:'9543210987',createdAt:DateTime.now().subtract(const Duration(days:15))),
-    Customer(id:'c5',name:'Raju Prasad',    phone:'9432109876',createdAt:DateTime.now().subtract(const Duration(days:10))),
-    Customer(id:'c6',name:'Priya Kumari',   phone:'9321098765',createdAt:DateTime.now().subtract(const Duration(days:8))),
-    Customer(id:'c7',name:'Vikram Yadav',   phone:'9210987654',createdAt:DateTime.now().subtract(const Duration(days:5))),
-  ];
+        Customer(id: 'c1', name: 'Ramesh Gupta', phone: '9876543210', createdAt: DateTime.now().subtract(const Duration(days: 30))),
+        Customer(id: 'c2', name: 'Kavita Devi', phone: '9765432109', createdAt: DateTime.now().subtract(const Duration(days: 25))),
+        Customer(id: 'c3', name: 'Mohan Sharma', phone: '9654321098', createdAt: DateTime.now().subtract(const Duration(days: 20))),
+        Customer(id: 'c4', name: 'Sunita Singh', phone: '9543210987', createdAt: DateTime.now().subtract(const Duration(days: 15))),
+        Customer(id: 'c5', name: 'Raju Prasad', phone: '9432109876', createdAt: DateTime.now().subtract(const Duration(days: 10))),
+        Customer(id: 'c6', name: 'Priya Kumari', phone: '9321098765', createdAt: DateTime.now().subtract(const Duration(days: 8))),
+        Customer(id: 'c7', name: 'Vikram Yadav', phone: '9210987654', createdAt: DateTime.now().subtract(const Duration(days: 5))),
+      ];
 
   List<entity.Transaction> _seedTransactions() {
     final now = DateTime.now();
-    DateTime ago(int d) => now.subtract(Duration(days:d));
+    DateTime ago(int d) => now.subtract(Duration(days: d));
     return [
-      entity.Transaction(id:_uuid.v4(),customerId:'c1',customerName:'Ramesh Gupta',  amount:350,type:entity.TransactionType.credit,    direction:entity.TransactionDirection.outgoing,note:'Atta 10kg, Dal 2kg',  date:ago(12)),
-      entity.Transaction(id:_uuid.v4(),customerId:'c1',customerName:'Ramesh Gupta',  amount:200,type:entity.TransactionType.upiPaytm,  direction:entity.TransactionDirection.incoming,note:'Partial payment',     date:ago(8)),
-      entity.Transaction(id:_uuid.v4(),customerId:'c2',customerName:'Kavita Devi',   amount:180,type:entity.TransactionType.credit,    direction:entity.TransactionDirection.outgoing,note:'Rice 5kg, Sugar 2kg', date:ago(5)),
-      entity.Transaction(id:_uuid.v4(),customerId:'c3',customerName:'Mohan Sharma',  amount:500,type:entity.TransactionType.credit,    direction:entity.TransactionDirection.outgoing,note:'Monthly grocery',     date:ago(15)),
-      entity.Transaction(id:_uuid.v4(),customerId:'c3',customerName:'Mohan Sharma',  amount:500,type:entity.TransactionType.upiGpay,   direction:entity.TransactionDirection.incoming,note:'Full payment',        date:ago(10)),
-      entity.Transaction(id:_uuid.v4(),customerId:'c4',customerName:'Sunita Singh',  amount:600,type:entity.TransactionType.credit,    direction:entity.TransactionDirection.outgoing,note:'Cooking oil, biscuits',date:ago(12)),
-      entity.Transaction(id:_uuid.v4(),customerId:'c4',customerName:'Sunita Singh',  amount:200,type:entity.TransactionType.cash,      direction:entity.TransactionDirection.incoming,note:'Part payment',        date:ago(7)),
-      entity.Transaction(id:_uuid.v4(),customerId:'c5',customerName:'Raju Prasad',   amount:250,type:entity.TransactionType.credit,    direction:entity.TransactionDirection.outgoing,note:'Soap, shampoo, chips',date:ago(7)),
-      entity.Transaction(id:_uuid.v4(),customerId:'c6',customerName:'Priya Kumari',  amount:420,type:entity.TransactionType.credit,    direction:entity.TransactionDirection.outgoing,note:'Monthly grocery',     date:ago(1)),
-      entity.Transaction(id:_uuid.v4(),customerName:'Walk-in',amount:480,type:entity.TransactionType.upiPaytm,  direction:entity.TransactionDirection.incoming,date:now),
-      entity.Transaction(id:_uuid.v4(),customerName:'Walk-in',amount:320,type:entity.TransactionType.upiGpay,   direction:entity.TransactionDirection.incoming,date:now),
-      entity.Transaction(id:_uuid.v4(),customerName:'Walk-in',amount:150,type:entity.TransactionType.upiPhonePe,direction:entity.TransactionDirection.incoming,date:now),
-      entity.Transaction(id:_uuid.v4(),customerName:'Walk-in',amount:750,type:entity.TransactionType.upiPaytm,  direction:entity.TransactionDirection.incoming,date:now),
-      entity.Transaction(id:_uuid.v4(),customerName:'Walk-in',amount:200,type:entity.TransactionType.upiGpay,   direction:entity.TransactionDirection.incoming,date:now),
-      entity.Transaction(id:_uuid.v4(),customerName:'Walk-in',amount:1200,type:entity.TransactionType.cash,     direction:entity.TransactionDirection.incoming,date:now),
-      entity.Transaction(id:_uuid.v4(),customerName:'Walk-in',amount:350,type:entity.TransactionType.cash,      direction:entity.TransactionDirection.incoming,date:now),
-      entity.Transaction(id:_uuid.v4(),customerId:'c7',customerName:'Vikram Yadav', amount:310,type:entity.TransactionType.upiGpay, direction:entity.TransactionDirection.incoming,note:'Cleared dues',date:now),
+      entity.Transaction(id: _uuid.v4(), customerId: 'c1', customerName: 'Ramesh Gupta', amount: 350, type: entity.TransactionType.credit, direction: entity.TransactionDirection.outgoing, note: 'Atta 10kg, Dal 2kg', date: ago(12)),
+      entity.Transaction(id: _uuid.v4(), customerId: 'c1', customerName: 'Ramesh Gupta', amount: 200, type: entity.TransactionType.upiPaytm, direction: entity.TransactionDirection.incoming, note: 'Partial payment', date: ago(8)),
+      entity.Transaction(id: _uuid.v4(), customerId: 'c2', customerName: 'Kavita Devi', amount: 180, type: entity.TransactionType.credit, direction: entity.TransactionDirection.outgoing, note: 'Rice 5kg, Sugar 2kg', date: ago(5)),
+      entity.Transaction(id: _uuid.v4(), customerId: 'c3', customerName: 'Mohan Sharma', amount: 500, type: entity.TransactionType.credit, direction: entity.TransactionDirection.outgoing, note: 'Monthly grocery', date: ago(15)),
+      entity.Transaction(id: _uuid.v4(), customerId: 'c3', customerName: 'Mohan Sharma', amount: 500, type: entity.TransactionType.upiGpay, direction: entity.TransactionDirection.incoming, note: 'Full payment', date: ago(10)),
+      entity.Transaction(id: _uuid.v4(), customerId: 'c4', customerName: 'Sunita Singh', amount: 600, type: entity.TransactionType.credit, direction: entity.TransactionDirection.outgoing, note: 'Cooking oil, biscuits', date: ago(12)),
+      entity.Transaction(id: _uuid.v4(), customerId: 'c4', customerName: 'Sunita Singh', amount: 200, type: entity.TransactionType.cash, direction: entity.TransactionDirection.incoming, note: 'Part payment', date: ago(7)),
+      entity.Transaction(id: _uuid.v4(), customerId: 'c5', customerName: 'Raju Prasad', amount: 250, type: entity.TransactionType.credit, direction: entity.TransactionDirection.outgoing, note: 'Soap, shampoo, chips', date: ago(7)),
+      entity.Transaction(id: _uuid.v4(), customerId: 'c6', customerName: 'Priya Kumari', amount: 420, type: entity.TransactionType.credit, direction: entity.TransactionDirection.outgoing, note: 'Monthly grocery', date: ago(1)),
+      entity.Transaction(id: _uuid.v4(), customerName: 'Walk-in', amount: 480, type: entity.TransactionType.upiPaytm, direction: entity.TransactionDirection.incoming, date: now),
+      entity.Transaction(id: _uuid.v4(), customerName: 'Walk-in', amount: 320, type: entity.TransactionType.upiGpay, direction: entity.TransactionDirection.incoming, date: now),
+      entity.Transaction(id: _uuid.v4(), customerName: 'Walk-in', amount: 150, type: entity.TransactionType.upiPhonePe, direction: entity.TransactionDirection.incoming, date: now),
+      entity.Transaction(id: _uuid.v4(), customerName: 'Walk-in', amount: 750, type: entity.TransactionType.upiPaytm, direction: entity.TransactionDirection.incoming, date: now),
+      entity.Transaction(id: _uuid.v4(), customerName: 'Walk-in', amount: 200, type: entity.TransactionType.upiGpay, direction: entity.TransactionDirection.incoming, date: now),
+      entity.Transaction(id: _uuid.v4(), customerName: 'Walk-in', amount: 1200, type: entity.TransactionType.cash, direction: entity.TransactionDirection.incoming, date: now),
+      entity.Transaction(id: _uuid.v4(), customerName: 'Walk-in', amount: 350, type: entity.TransactionType.cash, direction: entity.TransactionDirection.incoming, date: now),
+      entity.Transaction(id: _uuid.v4(), customerId: 'c7', customerName: 'Vikram Yadav', amount: 310, type: entity.TransactionType.upiGpay, direction: entity.TransactionDirection.incoming, note: 'Cleared dues', date: now),
     ];
   }
 
-  // Customers
   Future<List<Customer>> getCustomers() async {
     final p = await _prefs;
     final raw = p.getString(_custsKey);
     if (raw == null) return [];
-    return (jsonDecode(raw) as List).map((e) => _custFromMap(e)).toList();
+    return (jsonDecode(raw) as List).map((e) => _custFromMap(Map<String, dynamic>.from(e as Map))).toList();
   }
 
   Future<void> addCustomer(Customer c) async {
-    final all = await getCustomers(); all.add(c); await _saveCustomers(all);
+    final all = await getCustomers();
+    all.add(c);
+    await _saveCustomers(all);
   }
 
   Future<void> _saveCustomers(List<Customer> list) async {
@@ -388,17 +221,20 @@ class LocalSource {
     await p.setString(_custsKey, jsonEncode(list.map(_custToMap).toList()));
   }
 
-  // Transactions
   Future<List<entity.Transaction>> getTransactions() async {
     final p = await _prefs;
     final raw = p.getString(_txnsKey);
     if (raw == null) return [];
-    return (jsonDecode(raw) as List).map((e) => _txnFromMap(e)).toList()
-      ..sort((a,b) => b.date.compareTo(a.date));
+    return (jsonDecode(raw) as List)
+        .map((e) => _txnFromMap(Map<String, dynamic>.from(e as Map)))
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
   }
 
   Future<void> addTransaction(entity.Transaction t) async {
-    final all = await getTransactions(); all.insert(0,t); await _saveTransactions(all);
+    final all = await getTransactions();
+    all.insert(0, t);
+    await _saveTransactions(all);
   }
 
   Future<void> _saveTransactions(List<entity.Transaction> list) async {
@@ -406,23 +242,30 @@ class LocalSource {
     await p.setString(_txnsKey, jsonEncode(list.map(_txnToMap).toList()));
   }
 
-  // Products / Stock
   Future<List<Product>> getProducts() async {
     final p = await _prefs;
     final raw = p.getString(_productsKey);
     if (raw == null) return [];
-    return (jsonDecode(raw) as List).map((e) => Product.fromMap(Map<String, dynamic>.from(e as Map))).toList()
+    return (jsonDecode(raw) as List)
+        .map((e) => Product.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
   }
 
   Future<void> addProduct(Product item) async {
-    final all = await getProducts(); all.add(item); await _saveProducts(all);
+    final all = await getProducts();
+    all.add(item);
+    await _saveProducts(all);
   }
 
   Future<void> updateProduct(Product item) async {
     final all = await getProducts();
     final idx = all.indexWhere((p) => p.id == item.id);
-    if (idx >= 0) all[idx] = item; else all.add(item);
+    if (idx >= 0) {
+      all[idx] = item;
+    } else {
+      all.add(item);
+    }
     await _saveProducts(all);
   }
 
@@ -437,51 +280,88 @@ class LocalSource {
     await p.setString(_productsKey, jsonEncode(list.map((e) => e.toMap()).toList()));
   }
 
-  // Bulk setters used by cloud sync to merge remote data.
-  Future<void> setCustomers(List<Customer> list) => _saveCustomers(list);
-  Future<void> setTransactions(List<entity.Transaction> list) => _saveTransactions(list);
-  Future<void> setProducts(List<Product> list) => _saveProducts(list);
-
-  // Computed
   Future<double> getBalance(String custId) async {
     final txns = await getTransactions();
-    return txns.where((t) => t.customerId == custId).fold<double>(0.0, (s,t) =>
-        t.direction == entity.TransactionDirection.outgoing ? s + t.amount : s - t.amount);
+    return txns.where((t) => t.customerId == custId).fold<double>(
+          0.0,
+          (s, t) => t.direction == entity.TransactionDirection.outgoing ? s + t.amount : s - t.amount,
+        );
   }
 
   Future<DailyTotals> getDailyTotals(DateTime date) async {
     final txns = await getTransactions();
     final today = txns.where((t) => _sameDay(t.date, date)).toList();
-    double paytm=0, gpay=0, phonePe=0, cash=0, creditOut=0, creditIn=0;
+    double paytm = 0, gpay = 0, phonePe = 0, cash = 0, creditOut = 0, creditIn = 0;
+
     for (final t in today) {
       if (t.direction == entity.TransactionDirection.incoming) {
-        switch(t.type) {
-          case entity.TransactionType.upiPaytm:   paytm += t.amount; break;
-          case entity.TransactionType.upiGpay:    gpay += t.amount; break;
-          case entity.TransactionType.upiPhonePe: phonePe += t.amount; break;
-          case entity.TransactionType.cash:       cash += t.amount; break;
-          case entity.TransactionType.credit:     creditIn += t.amount; break;
+        switch (t.type) {
+          case entity.TransactionType.upiPaytm:
+            paytm += t.amount;
+            break;
+          case entity.TransactionType.upiGpay:
+            gpay += t.amount;
+            break;
+          case entity.TransactionType.upiPhonePe:
+            phonePe += t.amount;
+            break;
+          case entity.TransactionType.cash:
+            cash += t.amount;
+            break;
+          case entity.TransactionType.credit:
+            creditIn += t.amount;
+            break;
         }
-      } else { if (t.type == entity.TransactionType.credit) creditOut += t.amount; }
+      } else {
+        if (t.type == entity.TransactionType.credit) creditOut += t.amount;
+      }
     }
-    return DailyTotals(paytm:paytm, gpay:gpay, phonePe:phonePe, cash:cash, creditOut:creditOut, creditIn:creditIn, txnCount:today.length);
+
+    return DailyTotals(
+      paytm: paytm,
+      gpay: gpay,
+      phonePe: phonePe,
+      cash: cash,
+      creditOut: creditOut,
+      creditIn: creditIn,
+      txnCount: today.length,
+    );
   }
 
   Future<List<OverdueCustomer>> getOverdueCustomers({int dueDays = 7}) async {
     final custs = await getCustomers();
-    final txns  = await getTransactions();
+    final txns = await getTransactions();
     final result = <OverdueCustomer>[];
+
     for (final c in custs) {
-      final bal = txns.where((t) => t.customerId == c.id).fold<double>(0.0, (s,t) =>
-          t.direction == entity.TransactionDirection.outgoing ? s + t.amount : s - t.amount);
+      final bal = txns.where((t) => t.customerId == c.id).fold<double>(
+            0.0,
+            (s, t) => t.direction == entity.TransactionDirection.outgoing ? s + t.amount : s - t.amount,
+          );
       if (bal <= 0) continue;
-      final lastCredit = txns.where((t) => t.customerId == c.id && t.type == entity.TransactionType.credit && t.direction == entity.TransactionDirection.outgoing).toList()
-        ..sort((a,b) => b.date.compareTo(a.date));
+
+      final lastCredit = txns
+          .where((t) =>
+              t.customerId == c.id &&
+              t.type == entity.TransactionType.credit &&
+              t.direction == entity.TransactionDirection.outgoing)
+          .toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+
       if (lastCredit.isEmpty) continue;
       final days = DateTime.now().difference(lastCredit.first.date).inDays;
-      result.add(OverdueCustomer(customerId:c.id, customerName:c.name, phone:c.phone, balance:bal, daysOverdue:days-dueDays));
+      result.add(
+        OverdueCustomer(
+          customerId: c.id,
+          customerName: c.name,
+          phone: c.phone,
+          balance: bal,
+          daysOverdue: days - dueDays,
+        ),
+      );
     }
-    result.sort((a,b) => b.daysOverdue.compareTo(a.daysOverdue));
+
+    result.sort((a, b) => b.daysOverdue.compareTo(a.daysOverdue));
     return result;
   }
 
@@ -489,21 +369,52 @@ class LocalSource {
     await seedDemoData();
   }
 
-  bool _sameDay(DateTime a, DateTime b) => a.year==b.year && a.month==b.month && a.day==b.day;
+  bool _sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
-  // Serialization helpers
-  Map<String,dynamic> _custToMap(Customer c) => {'id':c.id,'name':c.name,'phone':c.phone,'createdAt':c.createdAt.toIso8601String()};
-  Customer _custFromMap(Map<String,dynamic> m) => Customer(id:m['id'],name:m['name'],phone:m['phone'],createdAt:DateTime.parse(m['createdAt']));
-  Map<String,dynamic> _txnToMap(entity.Transaction t) => {'id':t.id,'customerId':t.customerId,'customerName':t.customerName,'amount':t.amount,'type':t.type.firestoreKey,'direction':t.direction==entity.TransactionDirection.incoming?'in':'out','note':t.note,'date':t.date.toIso8601String(),'source':t.source};
-  entity.Transaction _txnFromMap(Map<String,dynamic> m) => entity.Transaction(id:m['id'],customerId:m['customerId'],customerName:m['customerName']??'Walk-in',amount:(m['amount'] as num).toDouble(),type:entity.TransactionTypeExt.fromKey(m['type']??'cash'),direction:m['direction']=='in'?entity.TransactionDirection.incoming:entity.TransactionDirection.outgoing,note:m['note'],date:DateTime.parse(m['date']),source:m['source']??'manual');
+  Map<String, dynamic> _custToMap(Customer c) => {
+        'id': c.id,
+        'name': c.name,
+        'phone': c.phone,
+        'createdAt': c.createdAt.toIso8601String(),
+      };
+
+  Customer _custFromMap(Map<String, dynamic> m) => Customer(
+        id: m['id'] as String,
+        name: m['name'] as String,
+        phone: m['phone'] as String,
+        createdAt: DateTime.parse(m['createdAt'] as String),
+      );
+
+  Map<String, dynamic> _txnToMap(entity.Transaction t) => {
+        'id': t.id,
+        'customerId': t.customerId,
+        'customerName': t.customerName,
+        'amount': t.amount,
+        'type': t.type.firestoreKey,
+        'direction': t.direction == entity.TransactionDirection.incoming ? 'in' : 'out',
+        'note': t.note,
+        'date': t.date.toIso8601String(),
+        'source': t.source,
+      };
+
+  entity.Transaction _txnFromMap(Map<String, dynamic> m) => entity.Transaction(
+        id: m['id'] as String,
+        customerId: m['customerId'] as String?,
+        customerName: (m['customerName'] ?? 'Walk-in') as String,
+        amount: (m['amount'] as num).toDouble(),
+        type: entity.TransactionTypeExt.fromKey((m['type'] ?? 'cash') as String),
+        direction: (m['direction'] == 'in')
+            ? entity.TransactionDirection.incoming
+            : entity.TransactionDirection.outgoing,
+        note: m['note'] as String?,
+        date: DateTime.parse(m['date'] as String),
+        source: (m['source'] ?? 'manual') as String,
+      );
 }
 
-// ── Riverpod Providers ────────────────────────────────
 final localSourceProvider = Provider<LocalSource>((_) => LocalSource());
-
 final appInitProvider = FutureProvider<void>((ref) => ref.watch(localSourceProvider).ensureSeeded());
 
-// ── Store profile ──
 class StoreProfileNotifier extends StateNotifier<StoreProfile> {
   final LocalSource _source;
   StoreProfileNotifier(this._source) : super(StoreProfile.empty) {
@@ -539,7 +450,6 @@ final addTransactionProvider = Provider<Future<void> Function(entity.Transaction
     ref.invalidate(_txnStreamCtrl);
     ref.invalidate(todayTotalsProvider);
     ref.invalidate(overdueCustomersProvider);
-    ref.read(cloudSyncProvider.notifier).pushChanges();
   };
 });
 
@@ -557,7 +467,6 @@ final addCustomerProvider = Provider<Future<void> Function(Customer)>((ref) {
   return (c) async {
     await ref.read(localSourceProvider).addCustomer(c);
     ref.invalidate(customersStreamProvider);
-    ref.read(cloudSyncProvider.notifier).pushChanges();
   };
 });
 
@@ -578,7 +487,6 @@ final overdueCustomersProvider = FutureProvider<List<OverdueCustomer>>((ref) {
   return ref.read(localSourceProvider).getOverdueCustomers(dueDays: dueDays);
 });
 
-// ── Products / Stock ──
 final productsStreamProvider = StreamProvider<List<Product>>((ref) async* {
   await ref.watch(appInitProvider.future);
   yield await ref.read(localSourceProvider).getProducts();
@@ -588,7 +496,6 @@ final saveProductProvider = Provider<Future<void> Function(Product)>((ref) {
   return (item) async {
     await ref.read(localSourceProvider).updateProduct(item);
     ref.invalidate(productsStreamProvider);
-    ref.read(cloudSyncProvider.notifier).pushChanges();
   };
 });
 
@@ -596,21 +503,126 @@ final deleteProductProvider = Provider<Future<void> Function(String)>((ref) {
   return (id) async {
     await ref.read(localSourceProvider).deleteProduct(id);
     ref.invalidate(productsStreamProvider);
-    ref.read(cloudSyncProvider.notifier).pushChanges();
   };
 });
 
-final smsQueueProvider = StateNotifierProvider<_SmsQueueNotifier, List<SmsEntry>>((_) => _SmsQueueNotifier());
+final smsQueueProvider = StateNotifierProvider<_SmsQueueNotifier, List<SmsEntry>>(
+  (ref) => _SmsQueueNotifier(ref),
+);
 
 class _SmsQueueNotifier extends StateNotifier<List<SmsEntry>> {
-  _SmsQueueNotifier() : super([]);
-  void add(SmsEntry e) { if (!state.any((s) => s.id == e.id)) state = [...state, e]; }
-  void dismiss(String id) { state = state.map((e) => e.id==id ? SmsEntry(id:e.id,rawSms:e.rawSms,parsedAmount:e.parsedAmount,parsedSource:e.parsedSource,receivedAt:e.receivedAt,status:'dismissed') : e).toList(); }
-  void clear() => state = state.where((e) => e.status=='pending').toList();
-  List<SmsEntry> get pending => state.where((e) => e.status=='pending').toList();
+  _SmsQueueNotifier(this._ref) : super([]) {
+    _nativeSub = _ref.read(upiNotificationServiceProvider).stream().listen(_onNativeUpiEvent);
+  }
+
+  final Ref _ref;
+  StreamSubscription<UpiNotificationEvent>? _nativeSub;
+  final _uuid = const Uuid();
+
+  void add(SmsEntry e) {
+    if (!state.any((s) => s.id == e.id)) {
+      state = [...state, e];
+    }
+  }
+
+  void _onNativeUpiEvent(UpiNotificationEvent event) {
+    final generatedId = 'upi_${event.timestamp}_${event.amount.toStringAsFixed(0)}_${event.appSource}';
+    final parsedSource = _normalizeSource(event.appSource, event.rawText);
+    final entry = SmsEntry(
+      id: generatedId,
+      rawSms: event.rawText,
+      parsedAmount: event.amount,
+      parsedSource: parsedSource,
+      receivedAt: DateTime.fromMillisecondsSinceEpoch(event.timestamp),
+      status: 'pending',
+    );
+    add(entry);
+  }
+
+  entity.TransactionType _normalizeSource(String appSource, String rawText) {
+    final s = '$appSource $rawText'.toLowerCase();
+    if (s.contains('paytm')) return entity.TransactionType.upiPaytm;
+    if (s.contains('phonepe') || s.contains('phone pe')) return entity.TransactionType.upiPhonePe;
+    if (s.contains('gpay') || s.contains('google pay') || s.contains('paisa.user')) return entity.TransactionType.upiGpay;
+    return entity.TransactionType.upiGpay;
+  }
+
+  Future<void> convertToTransaction({
+    required SmsEntry entry,
+    String? customerId,
+    String? customerName,
+    String? note,
+  }) async {
+    final type = entry.parsedSource ?? entity.TransactionType.upiGpay;
+    final amount = entry.parsedAmount ?? 0;
+    if (amount <= 0) return;
+
+    final txn = entity.Transaction(
+      id: _uuid.v4(),
+      customerId: customerId,
+      customerName: customerName?.trim().isNotEmpty == true ? customerName!.trim() : 'Walk-in',
+      amount: amount,
+      type: type,
+      direction: entity.TransactionDirection.incoming,
+      note: note,
+      date: entry.receivedAt,
+      source: 'notification_listener',
+    );
+
+    await _ref.read(localSourceProvider).addTransaction(txn);
+    markProcessed(entry.id);
+    _ref.invalidate(_txnStreamCtrl);
+    _ref.invalidate(todayTotalsProvider);
+    _ref.invalidate(overdueCustomersProvider);
+    _ref.invalidate(customersStreamProvider);
+  }
+
+  void markProcessed(String id) {
+    state = state
+        .map((e) => e.id == id
+            ? SmsEntry(
+                id: e.id,
+                rawSms: e.rawSms,
+                parsedAmount: e.parsedAmount,
+                parsedSource: e.parsedSource,
+                receivedAt: e.receivedAt,
+                status: 'processed',
+              )
+            : e)
+        .toList();
+  }
+
+  void dismiss(String id) {
+    state = state
+        .map((e) => e.id == id
+            ? SmsEntry(
+                id: e.id,
+                rawSms: e.rawSms,
+                parsedAmount: e.parsedAmount,
+                parsedSource: e.parsedSource,
+                receivedAt: e.receivedAt,
+                status: 'dismissed',
+              )
+            : e)
+        .toList();
+  }
+
+  void clear() {
+    state = state.where((e) => e.status == 'pending').toList();
+  }
+
+  List<SmsEntry> get pending => state.where((e) => e.status == 'pending').toList();
+
+  @override
+  void dispose() {
+    _nativeSub?.cancel();
+    super.dispose();
+  }
 }
 
 final onboardedProvider = FutureProvider<bool>((ref) async {
   final p = await SharedPreferences.getInstance();
   return p.getBool('sangam_onboarded') ?? false;
 });
+
+final languageProvider = StateProvider<bool>((_) => false);

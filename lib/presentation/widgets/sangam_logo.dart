@@ -60,7 +60,7 @@ class _SangamLogoState extends State<SangamLogo> with SingleTickerProviderStateM
         gradient: AppGradients.saffron,
         borderRadius: BorderRadius.circular(radius),
         boxShadow: [
-          BoxShadow(color: AppColors.saffron.withOpacity(0.38), blurRadius: widget.size * 0.28, offset: Offset(0, widget.size * 0.08)),
+          BoxShadow(color: AppColors.saffron.withValues(alpha: 0.38), blurRadius: widget.size * 0.28, offset: Offset(0, widget.size * 0.08)),
         ],
       ),
       child: Stack(children: [
@@ -71,7 +71,7 @@ class _SangamLogoState extends State<SangamLogo> with SingleTickerProviderStateM
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                colors: [Colors.white.withOpacity(0.22), Colors.white.withOpacity(0.0)],
+                colors: [Colors.white.withValues(alpha: 0.22), Colors.white.withValues(alpha: 0.0)],
               ),
               borderRadius: BorderRadius.vertical(top: Radius.circular(radius)),
             ),
@@ -84,7 +84,7 @@ class _SangamLogoState extends State<SangamLogo> with SingleTickerProviderStateM
             height: widget.size * 0.74,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withOpacity(0.16), width: widget.size * 0.012),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.16), width: widget.size * 0.012),
             ),
           ),
         ),
@@ -112,8 +112,8 @@ class _ConfluencePainter extends CustomPainter {
 
     final tipColors = [
       Colors.white,
-      Colors.white.withOpacity(0.92),
-      Colors.white.withOpacity(0.82),
+      Colors.white.withValues(alpha: 0.92),
+      Colors.white.withValues(alpha: 0.82),
     ];
 
     // Three streams curving from the rim into the centre.

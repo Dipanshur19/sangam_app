@@ -44,7 +44,7 @@ class MultiDeviceScreen extends ConsumerWidget {
             decoration: BoxDecoration(
               color: AppColors.warningBg,
               borderRadius: BorderRadius.circular(AppRadius.lg),
-              border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+              border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
@@ -70,7 +70,7 @@ class MultiDeviceScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
-          Text('SIGNED-IN ACCOUNT', style: AppTextStyles.labelCaps),
+          const Text('SIGNED-IN ACCOUNT', style: AppTextStyles.labelCaps),
           const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(
@@ -81,7 +81,7 @@ class MultiDeviceScreen extends ConsumerWidget {
             child: ListTile(
               leading: Container(
                 width: 40, height: 40,
-                decoration: BoxDecoration(color: AppColors.surfaceTinted, shape: BoxShape.circle),
+                decoration: const BoxDecoration(color: AppColors.surfaceTinted, shape: BoxShape.circle),
                 child: const Icon(Icons.phone_android_rounded, color: AppColors.saffron, size: 20),
               ),
               title: Text(me?.name ?? 'This device', style: AppTextStyles.bodyMd),
@@ -106,9 +106,9 @@ class MultiDeviceScreen extends ConsumerWidget {
       builder: (ctx) => Padding(
         padding: const EdgeInsets.all(24),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Cloud sync (coming soon)', style: AppTextStyles.h3),
+          const Text('Cloud sync (coming soon)', style: AppTextStyles.h3),
           const SizedBox(height: 10),
-          Text(
+          const Text(
             'Cloud sync lets the owner and staff use the same shop data on different phones in real time. '
             'It is being set up with a secure cloud backend. Until then, multiple staff can use this app on the '
             'shop\'s shared device, each with their own login.',

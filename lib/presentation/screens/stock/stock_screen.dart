@@ -80,9 +80,9 @@ class _EmptyStock extends StatelessWidget {
               child: const Icon(Icons.inventory_2_outlined, size: 44, color: AppColors.saffron),
             ),
             const SizedBox(height: 20),
-            Text('Manage your Inventory', style: AppTextStyles.h3, textAlign: TextAlign.center),
+            const Text('Manage your Inventory', style: AppTextStyles.h3, textAlign: TextAlign.center),
             const SizedBox(height: 8),
-            Text('Create a list of items you sell and track them here.',
+            const Text('Create a list of items you sell and track them here.',
                 textAlign: TextAlign.center, style: AppTextStyles.body),
           ]),
         ),
@@ -111,7 +111,7 @@ class _ProductTile extends ConsumerWidget {
             width: 44, height: 44,
             decoration: BoxDecoration(color: AppColors.surfaceTinted, borderRadius: BorderRadius.circular(12)),
             child: Center(child: Text(product.name.isEmpty ? '?' : product.name[0].toUpperCase(),
-                style: TextStyle(color: AppColors.saffron, fontWeight: FontWeight.w700, fontSize: 16))),
+                style: const TextStyle(color: AppColors.saffron, fontWeight: FontWeight.w700, fontSize: 16))),
           ),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -181,7 +181,7 @@ void _editSheet(BuildContext context, WidgetRef ref, Product? existing) {
                 decoration: const InputDecoration(labelText: 'Quantity'))),
           ]),
           const SizedBox(height: 14),
-          Text('UNIT', style: AppTextStyles.labelCaps),
+          const Text('UNIT', style: AppTextStyles.labelCaps),
           const SizedBox(height: 8),
           Wrap(spacing: 8, runSpacing: 8, children: units.map((u) {
             final sel = unit == u;

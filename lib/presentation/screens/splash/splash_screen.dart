@@ -122,7 +122,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   child: Column(children: [
                     Text('Sangam', style: AppTextStyles.h1.copyWith(color: Colors.white, letterSpacing: 0)),
                     const SizedBox(height: 4),
-                    Text('Sab ka ek hisaab', style: AppTextStyles.body.copyWith(color: Colors.white.withOpacity(0.8))),
+                    Text('Sab ka ek hisaab', style: AppTextStyles.body.copyWith(color: Colors.white.withValues(alpha: 0.8))),
                   ]),
                 ),
               ),
@@ -169,7 +169,7 @@ class _ParticlePainter extends CustomPainter {
       if (opacity <= 0) continue;
       final x = (p[0] + math.cos(p[3]) * phase * 0.15) * size.width;
       final y = (p[1] - phase * 0.6) * size.height;
-      paint.color = Colors.white.withOpacity(opacity * 0.5);
+      paint.color = Colors.white.withValues(alpha: opacity * 0.5);
       canvas.drawCircle(Offset(x, y), p[2] * 4, paint);
     }
   }

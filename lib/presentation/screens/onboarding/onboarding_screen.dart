@@ -102,7 +102,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with TickerProvider
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     width: i == _page ? 24 : 8, height: 8,
                     decoration: BoxDecoration(
-                      color: i == _page ? slide.color : slide.color.withOpacity(0.25),
+                      color: i == _page ? slide.color : slide.color.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ))),
@@ -209,9 +209,9 @@ class _ConfusedPainter extends CustomPainter {
     final colors = [AppColors.paytm, AppColors.gpay, AppColors.phonePe, AppColors.cash];
     final positions = [Offset(cx - 70, cy - 40), Offset(cx + 70, cy - 40), Offset(cx - 40, cy + 60), Offset(cx + 50, cy + 50)];
     for (int i = 0; i < 4; i++) {
-      p.color = colors[i].withOpacity(0.15);
+      p.color = colors[i].withValues(alpha: 0.15);
       canvas.drawCircle(positions[i], 70, p);
-      p.color = colors[i].withOpacity(0.4);
+      p.color = colors[i].withValues(alpha: 0.4);
       p.style = PaintingStyle.stroke;
       p.strokeWidth = 3;
       canvas.drawCircle(positions[i], 70, p);
@@ -219,9 +219,9 @@ class _ConfusedPainter extends CustomPainter {
     }
 
     // Question mark in center
-    p.color = AppColors.text1.withOpacity(0.3);
+    p.color = AppColors.text1.withValues(alpha: 0.3);
     canvas.drawCircle(Offset(cx, cy), 28, p);
-    final tp = TextPainter(text: TextSpan(text: '?', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: AppColors.text1.withOpacity(0.6))), textDirection: TextDirection.ltr)..layout();
+    final tp = TextPainter(text: TextSpan(text: '?', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: AppColors.text1.withValues(alpha: 0.6))), textDirection: TextDirection.ltr)..layout();
     tp.paint(canvas, Offset(cx - tp.width / 2, cy - tp.height / 2));
   }
   @override
@@ -235,7 +235,7 @@ class _UnifiedPainter extends CustomPainter {
     final p = Paint()..style = PaintingStyle.fill;
 
     // Central hub
-    p.color = AppColors.saffron.withOpacity(0.15);
+    p.color = AppColors.saffron.withValues(alpha: 0.15);
     canvas.drawCircle(Offset(cx, cy), 55, p);
     p.color = AppColors.saffron;
     p.style = PaintingStyle.stroke; p.strokeWidth = 3;
@@ -254,11 +254,11 @@ class _UnifiedPainter extends CustomPainter {
       final oy = cy + math.sin(angle) * 110;
 
       // Connection line
-      final linePaint = Paint()..color = colors[i].withOpacity(0.5)..strokeWidth = 2.5..style = PaintingStyle.stroke;
+      final linePaint = Paint()..color = colors[i].withValues(alpha: 0.5)..strokeWidth = 2.5..style = PaintingStyle.stroke;
       canvas.drawLine(Offset(cx, cy), Offset(ox, oy), linePaint);
 
       // Source circle
-      p.color = colors[i].withOpacity(0.2);
+      p.color = colors[i].withValues(alpha: 0.2);
       canvas.drawCircle(Offset(ox, oy), 32, p);
       p.color = colors[i]; p.style = PaintingStyle.stroke; p.strokeWidth = 2.5;
       canvas.drawCircle(Offset(ox, oy), 32, p);
@@ -279,7 +279,7 @@ class _HappyPainter extends CustomPainter {
     final p = Paint()..style = PaintingStyle.fill;
 
     // Central happy store icon
-    p.color = AppColors.success.withOpacity(0.12);
+    p.color = AppColors.success.withValues(alpha: 0.12);
     canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(cx, cy), width: 120, height: 100), const Radius.circular(20)), p);
     p.color = AppColors.success;
     p.style = PaintingStyle.stroke; p.strokeWidth = 3;
@@ -291,7 +291,7 @@ class _HappyPainter extends CustomPainter {
       final angle = i * 2 * math.pi / 3 - math.pi / 2;
       final ox = cx + math.cos(angle) * 110;
       final oy = cy + math.sin(angle) * 110;
-      p.color = AppColors.success.withOpacity(0.15);
+      p.color = AppColors.success.withValues(alpha: 0.15);
       canvas.drawCircle(Offset(ox, oy), 28, p);
       final tp = TextPainter(text: const TextSpan(text: '✓', style: TextStyle(fontSize: 22, color: AppColors.success, fontWeight: FontWeight.w700)), textDirection: TextDirection.ltr)..layout();
       tp.paint(canvas, Offset(ox - tp.width / 2, oy - tp.height / 2));
@@ -306,7 +306,7 @@ class _BgPainter extends CustomPainter {
   _BgPainter(this.t, this.color);
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()..color = color.withOpacity(0.05)..style = PaintingStyle.fill;
+    final p = Paint()..color = color.withValues(alpha: 0.05)..style = PaintingStyle.fill;
     for (int i = 0; i < 3; i++) {
       final phase = (t + i / 3) % 1.0;
       final r = size.width * (0.3 + phase * 0.5);

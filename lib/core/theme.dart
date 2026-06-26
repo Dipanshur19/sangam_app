@@ -94,11 +94,11 @@ class AppGradients {
 class AppShadows {
   AppShadows._();
 
-  static List<BoxShadow> sm = [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))];
-  static List<BoxShadow> md = [BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 16, offset: const Offset(0, 4))];
-  static List<BoxShadow> lg = [BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 32, offset: const Offset(0, 8))];
-  static List<BoxShadow> saffron = [BoxShadow(color: AppColors.saffron.withOpacity(0.32), blurRadius: 20, offset: const Offset(0, 6))];
-  static List<BoxShadow> glow(Color c) => [BoxShadow(color: c.withOpacity(0.3), blurRadius: 20, spreadRadius: 2)];
+  static List<BoxShadow> sm = [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2))];
+  static List<BoxShadow> md = [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 16, offset: const Offset(0, 4))];
+  static List<BoxShadow> lg = [BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 32, offset: const Offset(0, 8))];
+  static List<BoxShadow> saffron = [BoxShadow(color: AppColors.saffron.withValues(alpha: 0.32), blurRadius: 20, offset: const Offset(0, 6))];
+  static List<BoxShadow> glow(Color c) => [BoxShadow(color: c.withValues(alpha: 0.3), blurRadius: 20, spreadRadius: 2)];
 }
 
 class AppRadius {
@@ -157,16 +157,16 @@ ThemeData buildAppTheme() {
       background: AppColors.background,
       error: AppColors.error,
     ),
-    appBarTheme: AppBarTheme(
+    appBarTheme: const AppBarTheme(
       backgroundColor: AppColors.background,
       elevation: 0,
       scrolledUnderElevation: 0,
-      systemOverlayStyle: const SystemUiOverlayStyle(
+      systemOverlayStyle: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.dark,
       ),
       titleTextStyle: AppTextStyles.h4,
-      iconTheme: const IconThemeData(color: AppColors.text1),
+      iconTheme: IconThemeData(color: AppColors.text1),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(

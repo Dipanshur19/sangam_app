@@ -44,7 +44,7 @@ class ProfileScreen extends ConsumerWidget {
             Center(child: Text(store.ownerName, style: AppTextStyles.caption)),
           const SizedBox(height: 24),
 
-          Text('BUSINESS INFORMATION', style: AppTextStyles.labelCaps),
+          const Text('BUSINESS INFORMATION', style: AppTextStyles.labelCaps),
           const SizedBox(height: 8),
           _Card(children: [
             _Row(icon: Icons.store_outlined, label: 'Shop name', value: store.name, hint: 'Visible to your customers',
@@ -73,7 +73,7 @@ class ProfileScreen extends ConsumerWidget {
           ]),
           const SizedBox(height: 18),
 
-          Text('OTHER INFORMATION', style: AppTextStyles.labelCaps),
+          const Text('OTHER INFORMATION', style: AppTextStyles.labelCaps),
           const SizedBox(height: 8),
           _Card(children: [
             _Row(icon: Icons.mail_outline_rounded, label: 'Email', value: store.email, hint: 'Email',

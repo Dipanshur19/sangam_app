@@ -57,11 +57,13 @@ class _S extends ConsumerState<CustomersScreen> {
           error: (e, _) => Center(child: Text('$e')),
           data: (customers) {
             final filtered = customers.where((c) => c.name.toLowerCase().contains(_query.toLowerCase())).toList();
-            if (filtered.isEmpty) return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            if (filtered.isEmpty) {
+              return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.people_outline, size: 48, color: AppColors.border),
               const SizedBox(height: 12),
               Text(_query.isEmpty ? 'No customers yet' : 'No match for "$_query"', style: AppTextStyles.caption),
             ]));
+            }
             return ListView.separated(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 90),
               itemCount: filtered.length,
@@ -86,7 +88,7 @@ class _S extends ConsumerState<CustomersScreen> {
       builder: (ctx) => Padding(
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Add new customer', style: AppTextStyles.h3),
+          const Text('Add new customer', style: AppTextStyles.h3),
           const SizedBox(height: 16),
           TextField(controller: nameCtrl, autofocus: true, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Customer name *')),
           const SizedBox(height: 12),
@@ -119,8 +121,8 @@ class _CustomerTile extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(AppRadius.lg), border: Border.all(color: AppColors.borderLight, width: 0.5), boxShadow: AppShadows.sm),
         child: Row(children: [
-          Container(width: 44, height: 44, decoration: BoxDecoration(color: AppColors.saffronLight, shape: BoxShape.circle),
-              child: Center(child: Text(customer.name[0].toUpperCase(), style: TextStyle(color: AppColors.saffron, fontWeight: FontWeight.w700, fontSize: 16)))),
+          Container(width: 44, height: 44, decoration: const BoxDecoration(color: AppColors.saffronLight, shape: BoxShape.circle),
+              child: Center(child: Text(customer.name[0].toUpperCase(), style: const TextStyle(color: AppColors.saffron, fontWeight: FontWeight.w700, fontSize: 16)))),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(customer.name, style: AppTextStyles.bodyMd, maxLines: 1, overflow: TextOverflow.ellipsis),

@@ -100,7 +100,7 @@ class _S extends ConsumerState<CustomerDetailScreen> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(AppRadius.lg), border: Border.all(color: AppColors.border)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('RECORD PAYMENT', style: AppTextStyles.labelCaps),
+              const Text('RECORD PAYMENT', style: AppTextStyles.labelCaps),
               const SizedBox(height: 10),
               TextField(controller: _payCtrl, keyboardType: TextInputType.number, style: AppTextStyles.h3, decoration: const InputDecoration(prefixText: '₹  ')),
               const SizedBox(height: 12),
@@ -120,7 +120,7 @@ class _S extends ConsumerState<CustomerDetailScreen> {
           ).animate().fadeIn(duration: 300.ms).slideY(begin: -0.1, end: 0),
           if (_showPay) const SizedBox(height: 14),
 
-          Align(alignment: Alignment.centerLeft, child: Text('TRANSACTION HISTORY', style: AppTextStyles.labelCaps)),
+          const Align(alignment: Alignment.centerLeft, child: Text('TRANSACTION HISTORY', style: AppTextStyles.labelCaps)),
           const SizedBox(height: 10),
           txnsAsync.when(
             loading: () => const CircularProgressIndicator(color: AppColors.saffron),

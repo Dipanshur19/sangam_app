@@ -37,29 +37,29 @@ class ReportScreen extends ConsumerWidget {
           const SizedBox(height: 14),
 
           _Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('UPI BREAKDOWN', style: AppTextStyles.labelCaps), const SizedBox(height: 14),
+            const Text('UPI BREAKDOWN', style: AppTextStyles.labelCaps), const SizedBox(height: 14),
             _Bar('Paytm', totals.paytm, totals.upiTotal, AppColors.paytm),
             _Bar('GPay', totals.gpay, totals.upiTotal, AppColors.gpay),
             _Bar('PhonePe', totals.phonePe, totals.upiTotal, AppColors.phonePe),
             const Divider(height: 24),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Cash', style: AppTextStyles.bodyMd), Text('₹${totals.cash.toStringAsFixed(0)}', style: AppTextStyles.bodyMd.copyWith(fontWeight: FontWeight.w700))]),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Cash', style: AppTextStyles.bodyMd), Text('₹${totals.cash.toStringAsFixed(0)}', style: AppTextStyles.bodyMd.copyWith(fontWeight: FontWeight.w700))]),
             const Divider(height: 24),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Total', style: AppTextStyles.h4), Text('₹${totals.totalIn.toStringAsFixed(0)}', style: AppTextStyles.h4)]),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Total', style: AppTextStyles.h4), Text('₹${totals.totalIn.toStringAsFixed(0)}', style: AppTextStyles.h4)]),
           ])).animate(delay: 100.ms).fadeIn(duration: 400.ms),
           const SizedBox(height: 14),
 
           _Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('CREDIT (UDHAR)', style: AppTextStyles.labelCaps), const SizedBox(height: 14),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Udhar given', style: AppTextStyles.bodySm), Text('₹${totals.creditOut.toStringAsFixed(0)}', style: AppTextStyles.bodyMd.copyWith(color: AppColors.udhar, fontWeight: FontWeight.w700))]),
+            const Text('CREDIT (UDHAR)', style: AppTextStyles.labelCaps), const SizedBox(height: 14),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Udhar given', style: AppTextStyles.bodySm), Text('₹${totals.creditOut.toStringAsFixed(0)}', style: AppTextStyles.bodyMd.copyWith(color: AppColors.udhar, fontWeight: FontWeight.w700))]),
             const SizedBox(height: 8),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Credit recovered', style: AppTextStyles.bodySm), Text('₹${totals.creditIn.toStringAsFixed(0)}', style: AppTextStyles.bodyMd.copyWith(color: AppColors.success, fontWeight: FontWeight.w700))]),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Credit recovered', style: AppTextStyles.bodySm), Text('₹${totals.creditIn.toStringAsFixed(0)}', style: AppTextStyles.bodyMd.copyWith(color: AppColors.success, fontWeight: FontWeight.w700))]),
           ])).animate(delay: 200.ms).fadeIn(duration: 400.ms),
           const SizedBox(height: 14),
 
           overdueAsync.when(loading: ()=>const SizedBox(), error: (_,__)=>const SizedBox(), data: (overdue) {
             if (overdue.isEmpty) return const SizedBox();
             return _Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [Text('OUTSTANDING DUES', style: AppTextStyles.labelCaps), const Spacer(), Text('₹${overdue.fold(0.0,(s,o)=>s+o.balance).toStringAsFixed(0)}', style: AppTextStyles.bodyMd.copyWith(color: AppColors.udhar, fontWeight: FontWeight.w700))]),
+              Row(children: [const Text('OUTSTANDING DUES', style: AppTextStyles.labelCaps), const Spacer(), Text('₹${overdue.fold(0.0,(s,o)=>s+o.balance).toStringAsFixed(0)}', style: AppTextStyles.bodyMd.copyWith(color: AppColors.udhar, fontWeight: FontWeight.w700))]),
               const SizedBox(height: 12),
               ...overdue.map((o) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(children: [
                 Expanded(child: Text(o.customerName, style: AppTextStyles.bodySm)),
@@ -74,9 +74,9 @@ class ReportScreen extends ConsumerWidget {
             child: Column(children: [
               Text('TIME SAVED TODAY', style: AppTextStyles.labelCaps.copyWith(color: AppColors.saffronDark)),
               const SizedBox(height: 10),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Without Sangam'), Text('~120 min', style: TextStyle(decoration: TextDecoration.lineThrough, color: AppColors.text3))]),
+              const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Without Sangam'), Text('~120 min', style: TextStyle(decoration: TextDecoration.lineThrough, color: AppColors.text3))]),
               const SizedBox(height: 4),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('With Sangam'), Text('<1 min', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.saffron))]),
+              const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('With Sangam'), Text('<1 min', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.saffron))]),
             ]),
           ).animate(delay: 400.ms).fadeIn(duration: 400.ms),
           const SizedBox(height: 90),
